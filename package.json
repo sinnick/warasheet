@@ -1,0 +1,41 @@
+{
+  "name": "@sinnick/warasheet",
+  "version": "0.1.0",
+  "description": "A performant, gesture-driven bottom sheet component for React Native",
+  "main": "index.ts",
+  "types": "index.ts",
+  "files": [
+    "*.ts",
+    "*.tsx",
+    "components",
+    "hooks",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sinnick/warasheet.git"
+  },
+  "keywords": [
+    "react-native",
+    "bottom-sheet",
+    "sheet",
+    "modal",
+    "gesture",
+    "reanimated",
+    "expo"
+  ],
+  "author": "Fernando Massó <fercsbmwlp@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.70.0",
+    "react-native-gesture-handler": ">=2.0.0",
+    "react-native-reanimated": ">=3.0.0",
+    "react-native-safe-area-context": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-safe-area-context": {
+      "optional": true
+    }
+  }
+}
