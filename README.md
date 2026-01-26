@@ -14,10 +14,16 @@ Bottom sheet component nativo para React Native con soporte para interacción de
 
 ## Instalación
 
-El componente ya está incluido en el proyecto. Solo importar:
+Instalar:
+
+```bash
+npm install git+ssh://git@github.com:sinnick/warasheet.git
+```
+
+Importar:
 
 ```tsx
-import { WaraSheet, type WaraSheetRef } from "@/src/components/wara-sheet";
+import { WaraSheet, type WaraSheetRef } from "@sinnick/warasheet";
 ```
 
 ---
@@ -26,7 +32,7 @@ import { WaraSheet, type WaraSheetRef } from "@/src/components/wara-sheet";
 
 ```tsx
 import { useRef } from "react";
-import { WaraSheet, type WaraSheetRef } from "@/src/components/wara-sheet";
+import { WaraSheet, type WaraSheetRef } from "@sinnick/warasheet";
 
 function MyScreen() {
   const sheetRef = useRef<WaraSheetRef>(null);
@@ -280,7 +286,7 @@ function MapScreen() {
 
 ```tsx
 // Componente principal
-import { WaraSheet } from "@/src/components/wara-sheet";
+import { WaraSheet } from "@sinnick/warasheet";
 
 // Types
 import type {
@@ -289,16 +295,16 @@ import type {
   SheetDetent,
   DetentInfo,
   GrabberOptions,
-} from "@/src/components/wara-sheet";
+} from "@sinnick/warasheet";
 
 // Context (para control global)
-import { WaraSheetProvider, useWaraSheet } from "@/src/components/wara-sheet";
+import { WaraSheetProvider, useWaraSheet } from "@sinnick/warasheet";
 
 // Sub-componentes (uso avanzado)
-import { SheetGrabber, SheetBackdrop } from "@/src/components/wara-sheet";
+import { SheetGrabber, SheetBackdrop } from "@sinnick/warasheet";
 
 // Hooks
-import { useContentHeight } from "@/src/components/wara-sheet";
+import { useContentHeight } from "@sinnick/warasheet";
 ```
 
 ---
