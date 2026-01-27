@@ -3,9 +3,9 @@ import type { ColorValue, ViewStyle, StyleProp } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
 /**
- * Detent value - either "auto" (content-based) or a fraction between 0-1
+ * Detent value - either "auto" (content-based), "header" (header height only), or a fraction between 0-1
  */
-export type SheetDetent = "auto" | number;
+export type SheetDetent = "auto" | "header" | number;
 
 /**
  * Information about current detent state

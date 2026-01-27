@@ -47,7 +47,8 @@ function calculateDetentPositions(
   contentHeight: number,
   screenHeight: number,
   safeAreaBottom: number,
-  grabberHeight: number
+  grabberHeight: number,
+  headerHeight: number
 ): number[] {
   return detents.map((detent) => {
     if (detent === "auto") {
@@ -57,6 +58,11 @@ function calculateDetentPositions(
         MIN_AUTO_HEIGHT
       );
       return screenHeight - autoHeight;
+    }
+    if (detent === "header") {
+      // Header = only show the header (grabber + header content + safe area)
+      const headerOnlyHeight = headerHeight + safeAreaBottom;
+      return screenHeight - headerOnlyHeight;
     }
     // Fraction = percentage of screen height
     return screenHeight * (1 - detent);
@@ -174,9 +180,10 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
           measuredHeight,
           SCREEN_HEIGHT,
           insets.bottom,
-          grabberHeight
+          grabberHeight,
+          headerHeight
         ),
-      [detents, measuredHeight, insets.bottom, grabberHeight]
+      [detents, measuredHeight, insets.bottom, grabberHeight, headerHeight]
     );
 
     // Shared values for worklet access (avoid JS array operations in worklets)
