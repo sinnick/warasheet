@@ -61,7 +61,8 @@ function calculateDetentPositions(
     }
     if (detent === "header") {
       // Header = only show the header (grabber + header content + safe area)
-      const headerOnlyHeight = headerHeight + safeAreaBottom;
+      // Use MIN_AUTO_HEIGHT as fallback when header hasn't been measured yet
+      const headerOnlyHeight = Math.max(headerHeight, MIN_AUTO_HEIGHT) + safeAreaBottom;
       return screenHeight - headerOnlyHeight;
     }
     // Fraction = percentage of screen height
@@ -136,6 +137,7 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
       dimmedDetentIndex = 0,
       allowBackgroundInteraction = true,
       backgroundColor = "#fff",
+      safeAreaBackgroundColor,
       cornerRadius = 20,
       grabber = true,
       grabberOptions,
@@ -359,6 +361,18 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
       }
     }, [initialDetentIndex, detentPositions.length]);
 
+    // Update position when header height changes (for "header" detent)
+    // This ensures the sheet adjusts when header content loads/changes
+    useEffect(() => {
+      if (isPresented.value && headerHeight > 0 && detentPositions.length > 0) {
+        const currentIndex = currentDetentIndex.value;
+        if (currentIndex >= 0 && currentIndex < detentPositions.length) {
+          const newPosition = detentPositions[currentIndex];
+          translateY.value = withSpring(newPosition, SPRING_CONFIG);
+        }
+      }
+    }, [headerHeight, detentPositions, isPresented, currentDetentIndex, translateY]);
+
     // Pan gesture for dragging
     // activeOffsetY allows scroll gestures to work inside the sheet
     // The pan gesture only activates after moving 10px vertically
@@ -504,7 +518,6 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
               backgroundColor: backgroundColor as string,
               borderTopLeftRadius: cornerRadius,
               borderTopRightRadius: cornerRadius,
-              paddingBottom: insets.bottom,
             },
             style,
             animatedSheetStyle,
@@ -527,11 +540,21 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
           {/* Footer */}
           {footer}
 
+          {/* Safe area bottom - separate view allows different background color */}
+          {insets.bottom > 0 && (
+            <View
+              style={{
+                height: insets.bottom,
+                backgroundColor: (safeAreaBackgroundColor ?? backgroundColor) as string,
+              }}
+            />
+          )}
+
           {/* Overscroll fill */}
           <View
             style={[
               styles.overscrollFill,
-              { backgroundColor: backgroundColor as string },
+              { backgroundColor: (safeAreaBackgroundColor ?? backgroundColor) as string },
             ]}
           />
         </Animated.View>

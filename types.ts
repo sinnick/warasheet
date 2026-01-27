@@ -84,6 +84,13 @@ export interface WaraSheetProps {
   backgroundColor?: ColorValue;
 
   /**
+   * Background color for the safe area bottom padding.
+   * If not specified, uses backgroundColor.
+   * Useful for having a different color behind the home indicator on iOS.
+   */
+  safeAreaBackgroundColor?: ColorValue;
+
+  /**
    * Corner radius of the sheet
    * @default 20
    */
