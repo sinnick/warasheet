@@ -324,15 +324,10 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
 
     const resize = useCallback(
       (index: number) => {
-        console.log('[WaraSheet] resize called, index:', index, 'isPresented:', isPresented.value, 'detentPositions:', detentPositions);
-        if (!isPresented.value) {
-          console.log('[WaraSheet] resize aborted - sheet not presented');
-          return;
-        }
+        if (!isPresented.value) return;
 
         const targetIndex = Math.min(index, detentPositions.length - 1);
         const position = detentPositions[targetIndex];
-        console.log('[WaraSheet] resize targetIndex:', targetIndex, 'position:', position, 'currentTranslateY:', translateY.value);
 
         translateY.value = withSpring(position, SPRING_CONFIG, (finished) => {
           if (finished) {
