@@ -15,6 +15,7 @@ import Animated, {
   runOnJS,
   interpolate,
   Extrapolation,
+  cancelAnimation,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SheetGrabber } from "./components/SheetGrabber";
@@ -26,19 +27,21 @@ import type { WaraSheetProps, WaraSheetRef, SheetDetent, DetentInfo } from "./ty
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const { height: FULL_SCREEN_HEIGHT } = Dimensions.get("screen");
 
-// Spring animation config
+// Spring animation config - optimized for smooth, responsive feel
 const SPRING_CONFIG = {
   damping: 20,
-  stiffness: 200,
-  mass: 0.5,
+  stiffness: 300,
+  mass: 0.4,
 };
 
 // Extra padding for overscroll effect
 const OVERSCROLL_HEIGHT = 100;
 // Minimum height for auto detent when content is too small
 const MIN_AUTO_HEIGHT = 100;
-// Velocity threshold for quick dismiss
-const DISMISS_VELOCITY_THRESHOLD = 500;
+// Velocity threshold for quick dismiss (must be quite high)
+const DISMISS_VELOCITY_THRESHOLD = 1200;
+// Velocity threshold for biasing toward direction (lower = more responsive)
+const DIRECTION_VELOCITY_THRESHOLD = 150;
 
 /**
  * Calculate the Y position for each detent
@@ -151,6 +154,7 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
       onDetentChange,
       onDragBegin,
       onDragEnd,
+      onDragProgress,
       children,
     } = props;
 
@@ -180,6 +184,9 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
     const currentDetentIndex = useSharedValue(initialDetentIndex);
     const isPresented = useSharedValue(false);
     const backdropOpacity = useSharedValue(0);
+    const isDragging = useSharedValue(false);
+    // Track last closest detent during drag for onDragProgress callback
+    const lastClosestIndex = useSharedValue(-1);
 
     // Calculate detent positions
     const detentPositions = useMemo(
@@ -195,12 +202,14 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
       [detents, measuredHeight, insets.bottom, grabberHeight, headerHeight]
     );
 
-    // Shared values for worklet access (avoid JS array operations in worklets)
+    // Shared values for worklet access (avoid JS values in worklets)
     const highestDetent = useSharedValue(SCREEN_HEIGHT * 0.1);
     const lowestDetent = useSharedValue(SCREEN_HEIGHT * 0.5);
     const detentPositionsShared = useSharedValue<number[]>([]);
+    const insetsBottomShared = useSharedValue(insets.bottom);
+    const headerHeightShared = useSharedValue(headerHeight);
 
-    // Update shared values when detentPositions change
+    // Update shared values when dependencies change
     useEffect(() => {
       if (detentPositions.length > 0) {
         highestDetent.value = Math.min(...detentPositions);
@@ -208,6 +217,15 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
         detentPositionsShared.value = [...detentPositions];
       }
     }, [detentPositions, highestDetent, lowestDetent, detentPositionsShared]);
+
+    // Keep insets and header height in sync
+    useEffect(() => {
+      insetsBottomShared.value = insets.bottom;
+    }, [insets.bottom, insetsBottomShared]);
+
+    useEffect(() => {
+      headerHeightShared.value = headerHeight;
+    }, [headerHeight, headerHeightShared]);
 
     // Callback wrappers for worklets
     const callOnDidPresent = useCallback(
@@ -240,6 +258,13 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
         onDragEnd?.({ index });
       },
       [onDragEnd]
+    );
+
+    const callOnDragProgress = useCallback(
+      (index: number) => {
+        onDragProgress?.({ index });
+      },
+      [onDragProgress]
     );
 
     // Imperative methods
@@ -299,10 +324,15 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
 
     const resize = useCallback(
       (index: number) => {
-        if (!isPresented.value) return;
+        console.log('[WaraSheet] resize called, index:', index, 'isPresented:', isPresented.value, 'detentPositions:', detentPositions);
+        if (!isPresented.value) {
+          console.log('[WaraSheet] resize aborted - sheet not presented');
+          return;
+        }
 
         const targetIndex = Math.min(index, detentPositions.length - 1);
         const position = detentPositions[targetIndex];
+        console.log('[WaraSheet] resize targetIndex:', targetIndex, 'position:', position, 'currentTranslateY:', translateY.value);
 
         translateY.value = withSpring(position, SPRING_CONFIG, (finished) => {
           if (finished) {
@@ -370,7 +400,9 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
 
     // Update position when header height changes (for "header" detent)
     // This ensures the sheet adjusts when header content loads/changes
+    // Skip if user is actively dragging to prevent animation conflicts
     useEffect(() => {
+      if (isDragging.value) return;
       if (isPresented.value && headerHeight > 0 && detentPositions.length > 0) {
         const currentIndex = currentDetentIndex.value;
         if (currentIndex >= 0 && currentIndex < detentPositions.length) {
@@ -378,20 +410,28 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
           translateY.value = withSpring(newPosition, SPRING_CONFIG);
         }
       }
-    }, [headerHeight, detentPositions, isPresented, currentDetentIndex, translateY]);
+    }, [headerHeight, detentPositions, isPresented, currentDetentIndex, translateY, isDragging]);
 
     // Pan gesture for dragging
     // activeOffsetY allows scroll gestures to work inside the sheet
-    // The pan gesture only activates after moving 10px vertically
+    // Reduced to 5px for faster response while still allowing horizontal swipes
     const panGesture = Gesture.Pan()
       .enabled(draggable)
-      .activeOffsetY([-10, 10])
+      .activeOffsetY([-5, 5])
+      .failOffsetX([-20, 20])
       .shouldCancelWhenOutside(false)
       .onStart(() => {
+        'worklet';
+        // Cancel any running animation to prevent fighting with gesture
+        cancelAnimation(translateY);
+        isDragging.value = true;
         startY.value = translateY.value;
+        // Initialize lastClosestIndex to current detent
+        lastClosestIndex.value = currentDetentIndex.value;
         runOnJS(callOnDragBegin)(currentDetentIndex.value);
       })
       .onUpdate((event) => {
+        'worklet';
         // Calculate new position from the initial drag position
         const newY = startY.value + event.translationY;
 
@@ -414,9 +454,29 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
           );
           backdropOpacity.value = opacity;
         }
+
+        // Calculate closest detent for onDragProgress callback
+        const positions = detentPositionsShared.value;
+        if (positions.length > 0 && onDragProgress) {
+          let closestIndex = 0;
+          let closestDistance = Math.abs(translateY.value - positions[0]);
+          for (let i = 1; i < positions.length; i++) {
+            const distance = Math.abs(translateY.value - positions[i]);
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestIndex = i;
+            }
+          }
+
+          // Notify if closest detent changed
+          if (closestIndex !== lastClosestIndex.value) {
+            lastClosestIndex.value = closestIndex;
+            runOnJS(callOnDragProgress)(closestIndex);
+          }
+        }
       })
       .onEnd((event) => {
-        // Inline findClosestDetent logic for worklet safety
+        'worklet';
         const positions = detentPositionsShared.value;
         const currentY = translateY.value;
         const velocity = event.velocityY;
@@ -424,28 +484,36 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
         let targetIndex = -1;
         let targetPosition = SCREEN_HEIGHT;
 
-        // If dismissing with high velocity downward
-        if (dismissible && velocity > DISMISS_VELOCITY_THRESHOLD) {
+        // Only dismiss with very high velocity downward AND below lowest detent
+        const lowest = lowestDetent.value;
+        const isBelowLowest = currentY > lowest + 50;
+
+        if (dismissible && velocity > DISMISS_VELOCITY_THRESHOLD && isBelowLowest) {
           targetIndex = -1;
           targetPosition = SCREEN_HEIGHT;
         } else if (positions.length > 0) {
-          // Find closest detent
+          // Use velocity to bias toward direction
+          // Positive velocity = dragging down, negative = dragging up
+          const velocityBias = velocity * 0.15; // Convert velocity to position offset
+          const biasedY = currentY + velocityBias;
+
+          // Find closest detent to biased position
           let closestIndex = 0;
-          let closestDistance = Math.abs(currentY - positions[0]);
+          let closestDistance = Math.abs(biasedY - positions[0]);
 
           for (let i = 1; i < positions.length; i++) {
-            const distance = Math.abs(currentY - positions[i]);
+            const distance = Math.abs(biasedY - positions[i]);
             if (distance < closestDistance) {
               closestDistance = distance;
               closestIndex = i;
             }
           }
 
-          // Check if we should dismiss (if dragged below the lowest detent)
+          // Check if we should dismiss (if dragged well below the lowest detent with intent)
           if (dismissible) {
-            const lowest = lowestDetent.value;
-            const dismissThreshold = lowest + 100;
-            if (currentY > dismissThreshold) {
+            const dismissThreshold = lowest + 150;
+            // Need to be below threshold AND moving downward significantly
+            if (currentY > dismissThreshold && velocity > DIRECTION_VELOCITY_THRESHOLD) {
               targetIndex = -1;
               targetPosition = SCREEN_HEIGHT;
             } else {
@@ -484,19 +552,25 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
           }
         }
 
+        isDragging.value = false;
         runOnJS(callOnDragEnd)(targetIndex);
       });
 
-    // Animated styles for the sheet
-    const animatedSheetStyle = useAnimatedStyle(() => ({
-      transform: [{ translateY: translateY.value }],
-    }));
+    // Animated styles for the sheet - runs entirely on UI thread
+    const animatedSheetStyle = useAnimatedStyle(() => {
+      'worklet';
+      return {
+        transform: [{ translateY: translateY.value }],
+      };
+    });
 
     // Animated content style - calculates dynamic height based on sheet position
     // This is critical for scroll to work properly inside the sheet
+    // Uses shared values to avoid JS bridge calls in worklet
     const animatedContentStyle = useAnimatedStyle(() => {
+      'worklet';
       // Visible height = screen height - current Y position - safe area bottom - header height
-      const visibleHeight = SCREEN_HEIGHT - translateY.value - insets.bottom - headerHeight;
+      const visibleHeight = SCREEN_HEIGHT - translateY.value - insetsBottomShared.value - headerHeightShared.value;
       return {
         height: Math.max(visibleHeight, 0),
         minHeight: 0, // Critical for scroll to work on Android

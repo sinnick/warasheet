@@ -153,6 +153,12 @@ export interface WaraSheetProps {
   onDragEnd?: (info: DetentInfo) => void;
 
   /**
+   * Called during drag when the closest detent changes.
+   * Useful for updating UI (like chevron rotation) in real-time during drag.
+   */
+  onDragProgress?: (info: DetentInfo) => void;
+
+  /**
    * Sheet content
    */
   children: ReactNode;
