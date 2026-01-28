@@ -24,6 +24,7 @@ import { useWaraSheet } from "./WaraSheetContext";
 import type { WaraSheetProps, WaraSheetRef, SheetDetent, DetentInfo } from "./types";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: FULL_SCREEN_HEIGHT } = Dimensions.get("screen");
 
 // Spring animation config
 const SPRING_CONFIG = {
@@ -155,6 +156,12 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
 
     const insets = useSafeAreaInsets();
     const { register, unregister } = useWaraSheet();
+
+    // On Android without edge-to-edge, window height excludes the navigation bar
+    // but insets.bottom is 0. Calculate the gap to fill it with content background.
+    const navigationBarGap = Platform.OS === 'android'
+      ? Math.max(0, FULL_SCREEN_HEIGHT - SCREEN_HEIGHT - (insets.bottom || 0))
+      : 0;
     const { contentHeight, measuredHeight, onContentLayout } = useContentHeight();
 
     // State for measuring header height (grabber + header content)
@@ -550,12 +557,30 @@ export const WaraSheet = forwardRef<WaraSheetRef, WaraSheetProps>(
             />
           )}
 
-          {/* Overscroll fill */}
+          {/* Navigation bar fill for Android without edge-to-edge */}
+          {navigationBarGap > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: -navigationBarGap,
+                height: navigationBarGap,
+                backgroundColor: (safeAreaBackgroundColor ?? backgroundColor) as string,
+              }}
+            />
+          )}
+
+          {/* Overscroll fill - extends below sheet for pull-up overscroll effect */}
           <View
-            style={[
-              styles.overscrollFill,
-              { backgroundColor: (safeAreaBackgroundColor ?? backgroundColor) as string },
-            ]}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: -(OVERSCROLL_HEIGHT + navigationBarGap),
+              height: OVERSCROLL_HEIGHT + navigationBarGap,
+              backgroundColor: (safeAreaBackgroundColor ?? backgroundColor) as string,
+            }}
           />
         </Animated.View>
       </View>
@@ -588,12 +613,5 @@ const styles = StyleSheet.create({
   content: {
     flex: 0, // Use dynamic height instead of flex
     overflow: "hidden",
-  },
-  overscrollFill: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: -OVERSCROLL_HEIGHT,
-    height: OVERSCROLL_HEIGHT,
   },
 });
